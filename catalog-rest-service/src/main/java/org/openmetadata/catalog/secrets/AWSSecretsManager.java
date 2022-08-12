@@ -23,6 +23,7 @@ import org.openmetadata.catalog.airflow.AuthConfiguration;
 import org.openmetadata.catalog.entity.services.ServiceType;
 import org.openmetadata.catalog.exception.InvalidServiceConnectionException;
 import org.openmetadata.catalog.exception.SecretsManagerException;
+import org.openmetadata.catalog.metadataIngestion.DatabaseServiceMetadataPipeline;
 import org.openmetadata.catalog.services.connections.metadata.OpenMetadataServerConnection;
 import org.openmetadata.catalog.util.JsonUtils;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -39,6 +40,7 @@ public class AWSSecretsManager extends SecretsManager {
   public static final String ACCESS_KEY_ID = "accessKeyId";
   public static final String SECRET_ACCESS_KEY = "secretAccessKey";
   public static final String REGION = "region";
+  public static final String DATABASE_METADATA_PIPELINE_SECRET_ID_SUFFIX = "database-metadata-pipeline";
 
   private static AWSSecretsManager INSTANCE = null;
 
@@ -83,6 +85,25 @@ public class AWSSecretsManager extends SecretsManager {
     } catch (ClassNotFoundException ex) {
       throw InvalidServiceConnectionException.byMessage(
           connectionType, String.format("Failed to construct connection instance of %s", connectionType));
+    } catch (Exception e) {
+      throw SecretsManagerException.byMessage(getClass().getSimpleName(), secretName, e.getMessage());
+    }
+  }
+
+  @Override
+  public Object encryptOrDecryptDatabaseServiceMetadataPipeline(
+      DatabaseServiceMetadataPipeline databaseServiceMetadataPipeline, String serviceName, boolean encrypt) {
+    String secretName = buildSecretId(DATABASE_METADATA_PIPELINE_SECRET_ID_SUFFIX, serviceName);
+    try {
+      if (encrypt) {
+        String connectionConfigJson = JsonUtils.pojoToJson(databaseServiceMetadataPipeline);
+        if (connectionConfigJson != null) {
+          upsertSecret(secretName, connectionConfigJson);
+        }
+        return null;
+      } else {
+        return JsonUtils.readValue(getSecret(secretName), DatabaseServiceMetadataPipeline.class);
+      }
     } catch (Exception e) {
       throw SecretsManagerException.byMessage(getClass().getSimpleName(), secretName, e.getMessage());
     }
