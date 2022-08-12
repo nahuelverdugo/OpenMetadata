@@ -9,6 +9,7 @@ import org.openmetadata.catalog.airflow.AirflowConfiguration;
 import org.openmetadata.catalog.airflow.AuthConfiguration;
 import org.openmetadata.catalog.entity.services.ServiceType;
 import org.openmetadata.catalog.exception.SecretsManagerException;
+import org.openmetadata.catalog.metadataIngestion.DatabaseServiceMetadataPipeline;
 import org.openmetadata.catalog.services.connections.metadata.OpenMetadataServerConnection;
 
 public abstract class SecretsManager {
@@ -25,6 +26,9 @@ public abstract class SecretsManager {
 
   public abstract Object encryptOrDecryptServiceConnectionConfig(
       Object connectionConfig, String connectionType, String connectionName, ServiceType serviceType, boolean encrypt);
+
+  public abstract Object encryptOrDecryptDatabaseServiceMetadataPipeline(
+      DatabaseServiceMetadataPipeline databaseServiceMetadataPipeline, String serviceName, boolean encrypt);
 
   public OpenMetadataServerConnection decryptServerConnection(AirflowConfiguration airflowConfiguration) {
     OpenMetadataServerConnection.AuthProvider authProvider =
