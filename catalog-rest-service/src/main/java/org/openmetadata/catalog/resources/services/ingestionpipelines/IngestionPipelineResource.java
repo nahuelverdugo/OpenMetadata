@@ -59,11 +59,9 @@ import org.openmetadata.catalog.airflow.AirflowRESTClient;
 import org.openmetadata.catalog.api.services.ingestionPipelines.CreateIngestionPipeline;
 import org.openmetadata.catalog.api.services.ingestionPipelines.TestServiceConnection;
 import org.openmetadata.catalog.entity.services.ingestionPipelines.IngestionPipeline;
-import org.openmetadata.catalog.entity.services.ingestionPipelines.PipelineType;
 import org.openmetadata.catalog.jdbi3.CollectionDAO;
 import org.openmetadata.catalog.jdbi3.IngestionPipelineRepository;
 import org.openmetadata.catalog.jdbi3.ListFilter;
-import org.openmetadata.catalog.metadataIngestion.DatabaseServiceMetadataPipeline;
 import org.openmetadata.catalog.resources.Collection;
 import org.openmetadata.catalog.resources.EntityResource;
 import org.openmetadata.catalog.secrets.SecretsManager;
@@ -73,7 +71,6 @@ import org.openmetadata.catalog.services.connections.metadata.OpenMetadataServer
 import org.openmetadata.catalog.type.EntityHistory;
 import org.openmetadata.catalog.type.Include;
 import org.openmetadata.catalog.util.EntityUtil.Fields;
-import org.openmetadata.catalog.util.JsonUtils;
 import org.openmetadata.catalog.util.PipelineServiceClient;
 import org.openmetadata.catalog.util.ResultList;
 
@@ -101,7 +98,7 @@ public class IngestionPipelineResource extends EntityResource<IngestionPipeline,
   public IngestionPipelineResource(CollectionDAO dao, Authorizer authorizer, SecretsManager secretsManager) {
     super(IngestionPipeline.class, new IngestionPipelineRepository(dao, secretsManager), authorizer);
     this.secretsManager = secretsManager;
-    this.ingestionPipelineRepository = new IngestionPipelineRepository(dao);
+    this.ingestionPipelineRepository = new IngestionPipelineRepository(dao, secretsManager);
   }
 
   public void initialize(CatalogApplicationConfig config) {
@@ -588,25 +585,13 @@ public class IngestionPipelineResource extends EntityResource<IngestionPipeline,
       authorizer.authorize(
           securityContext,
           getOperationContext,
-          getResourceContextById(ingestionPipeline.getId().toString()),
+          getResourceContextById(ingestionPipeline.getId()),
           secretsManager.isLocal());
     } catch (AuthorizationException | IOException e) {
       ingestionPipeline.getSourceConfig().setConfig(null);
       return ingestionPipeline;
     }
-    String serviceType = ingestionPipeline.getService().getType();
-    // DatabaseServiceMetadataPipeline contains dbtConfigSource and must be decrypted
-    if (serviceType.equals(Entity.DATABASE_SERVICE)
-        && ingestionPipeline.getPipelineType().equals(PipelineType.METADATA)) {
-      ingestionPipeline
-          .getSourceConfig()
-          .setConfig(
-              secretsManager.encryptOrDecryptDatabaseServiceMetadataPipeline(
-                  JsonUtils.convertValue(
-                      ingestionPipeline.getSourceConfig().getConfig(), DatabaseServiceMetadataPipeline.class),
-                  ingestionPipeline.getName(),
-                  false));
-    }
+    secretsManager.encryptOrDecryptDbtConfigSource(ingestionPipeline, false);
     return ingestionPipeline;
   }
 }

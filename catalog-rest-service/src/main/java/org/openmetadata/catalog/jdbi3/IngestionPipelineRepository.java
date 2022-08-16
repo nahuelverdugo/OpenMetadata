@@ -21,7 +21,6 @@ import org.json.JSONObject;
 import org.openmetadata.catalog.Entity;
 import org.openmetadata.catalog.entity.services.ingestionPipelines.AirflowConfig;
 import org.openmetadata.catalog.entity.services.ingestionPipelines.IngestionPipeline;
-import org.openmetadata.catalog.entity.services.ingestionPipelines.PipelineType;
 import org.openmetadata.catalog.metadataIngestion.DatabaseServiceMetadataPipeline;
 import org.openmetadata.catalog.metadataIngestion.LogLevels;
 import org.openmetadata.catalog.resources.services.ingestionpipelines.IngestionPipelineResource;
@@ -84,34 +83,23 @@ public class IngestionPipelineRepository extends EntityRepository<IngestionPipel
     ingestionPipeline.withOwner(null).withService(null).withHref(null);
 
     String serviceType = service.getType();
-    // DatabaseServiceMetadataPipeline contains dbtConfigSource and must be encrypted
-    if (serviceType.equals(Entity.DATABASE_SERVICE)
-        && ingestionPipeline.getPipelineType().equals(PipelineType.METADATA)) {
+    // encrypt config in case of local secret manager
+    if (secretsManager.isLocal()) {
+      secretsManager.encryptOrDecryptDbtConfigSource(ingestionPipeline, serviceType, true);
+      store(ingestionPipeline.getId(), ingestionPipeline, update);
+    } else {
+      // otherwise, nullify the config since it will be kept outside OM
       DatabaseServiceMetadataPipeline databaseServiceMetadataPipeline =
           JsonUtils.convertValue(
               ingestionPipeline.getSourceConfig().getConfig(), DatabaseServiceMetadataPipeline.class);
-      // encrypt config in case of local secret manager
-      if (secretsManager.isLocal()) {
-        ingestionPipeline
-            .getSourceConfig()
-            .setConfig(
-                secretsManager.encryptOrDecryptDatabaseServiceMetadataPipeline(
-                    databaseServiceMetadataPipeline, ingestionPipeline.getName(), true));
-        store(ingestionPipeline.getId(), ingestionPipeline, update);
-      } else {
-        // otherwise, nullify the config since it will be kept outside OM
-        ingestionPipeline.getSourceConfig().setConfig(null);
-        store(ingestionPipeline.getId(), ingestionPipeline, update);
-        // save config in the secret manager after storing the ingestion pipeline
-        ingestionPipeline
-            .getSourceConfig()
-            .setConfig(
-                secretsManager.encryptOrDecryptDatabaseServiceMetadataPipeline(
-                    databaseServiceMetadataPipeline, ingestionPipeline.getName(), true));
-      }
-
-    } else {
+      Object dbtConfigSource = databaseServiceMetadataPipeline.getDbtConfigSource();
+      databaseServiceMetadataPipeline.setDbtConfigSource(null);
+      ingestionPipeline.getSourceConfig().setConfig(databaseServiceMetadataPipeline);
       store(ingestionPipeline.getId(), ingestionPipeline, update);
+      // save config in the secret manager after storing the ingestion pipeline
+      databaseServiceMetadataPipeline.setDbtConfigSource(dbtConfigSource);
+      ingestionPipeline.getSourceConfig().setConfig(databaseServiceMetadataPipeline);
+      secretsManager.encryptOrDecryptDbtConfigSource(ingestionPipeline, serviceType, true);
     }
 
     // Restore the relationships
@@ -162,18 +150,7 @@ public class IngestionPipelineRepository extends EntityRepository<IngestionPipel
     }
 
     private void updateSourceConfig() throws JsonProcessingException {
-      String serviceType = original.getService().getType();
-      // DatabaseServiceMetadataPipeline contains dbtConfigSource and must be encrypted
-      if (serviceType.equals(Entity.DATABASE_SERVICE) && original.getPipelineType().equals(PipelineType.METADATA)) {
-        original
-            .getSourceConfig()
-            .setConfig(
-                secretsManager.encryptOrDecryptDatabaseServiceMetadataPipeline(
-                    JsonUtils.convertValue(
-                        original.getSourceConfig().getConfig(), DatabaseServiceMetadataPipeline.class),
-                    original.getName(),
-                    false));
-      }
+      secretsManager.encryptOrDecryptDbtConfigSource(original, false);
 
       JSONObject origSourceConfig = new JSONObject(JsonUtils.pojoToJson(original.getSourceConfig().getConfig()));
       JSONObject updatedSourceConfig = new JSONObject(JsonUtils.pojoToJson(updated.getSourceConfig().getConfig()));

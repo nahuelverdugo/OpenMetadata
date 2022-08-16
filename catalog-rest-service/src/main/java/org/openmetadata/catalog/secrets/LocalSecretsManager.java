@@ -23,7 +23,6 @@ import org.openmetadata.catalog.airflow.AuthConfiguration;
 import org.openmetadata.catalog.entity.services.ServiceType;
 import org.openmetadata.catalog.exception.InvalidServiceConnectionException;
 import org.openmetadata.catalog.fernet.Fernet;
-import org.openmetadata.catalog.metadataIngestion.DatabaseServiceMetadataPipeline;
 import org.openmetadata.catalog.services.connections.metadata.OpenMetadataServerConnection;
 import org.openmetadata.catalog.util.JsonUtils;
 
@@ -58,9 +57,8 @@ public class LocalSecretsManager extends SecretsManager {
   }
 
   @Override
-  public DatabaseServiceMetadataPipeline encryptOrDecryptDatabaseServiceMetadataPipeline(
-      DatabaseServiceMetadataPipeline databaseServiceMetadataPipeline, String serviceName, boolean encrypt) {
-    return databaseServiceMetadataPipeline;
+  public Object encryptOrDecryptDbtConfigSource(Object dbtConfigSource, String ingestionPipelineName, boolean encrypt) {
+    return dbtConfigSource;
   }
 
   @Override
